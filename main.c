@@ -221,7 +221,7 @@ void list(char *hunt_id)
     // Open the hunt directory
     if ((d = opendir(hunt_id)) == NULL)
     {
-        perror("Directory doesn't exist: list function\n");
+        printf("Hunt doesn't exist: list function\n");
         exit(-1);
     }
 
@@ -278,6 +278,7 @@ void list(char *hunt_id)
         exit(-1);
     }
 }
+// Function to view a specific treasure in a hunt
 void view(char *hunt_id, char *t_id)
 {
     DIR *d;
@@ -287,7 +288,7 @@ void view(char *hunt_id, char *t_id)
     // Open the hunt directory
     if ((d = opendir(hunt_id)) == NULL)
     {
-        perror("Error opening directory: view function\n");
+        printf("Hunt doesn't exist: view function\n");
         exit(-1);
     }
     // Create the path for the treasures file
@@ -348,6 +349,7 @@ void view(char *hunt_id, char *t_id)
         exit(-1);
     }
 }
+// Function to remove a treasure from a hunt
 void remove_treasure(char *hunt_id, char *t_id)
 {
     DIR *d;
@@ -358,7 +360,7 @@ void remove_treasure(char *hunt_id, char *t_id)
     // Open the hunt directory
     if ((d = opendir(hunt_id)) == NULL)
     {
-        perror("Error opening directory: remove_treasure function\n");
+        printf("Hunt doesn't exist: remove_treasure function\n");
         exit(-1);
     }
     // Create the path for the treasures file
@@ -459,6 +461,7 @@ void remove_treasure(char *hunt_id, char *t_id)
         exit(-1);
     }
 }
+// Function to remove a hunt and its associated files
 void remove_hunt(char *hunt_id)
 {
     DIR *d;
@@ -466,7 +469,7 @@ void remove_hunt(char *hunt_id)
     struct dirent *dp;
     if ((d = opendir(hunt_id)) == NULL) // Open the hunt directory
     {
-        perror("Error opening directory: remove_hunt function\n");
+        perror("Hunt doesn't exist: remove_hunt function\n");
         exit(-1);
     }
     // Create the path for the treasures file
