@@ -10,71 +10,132 @@
 
 pid_t monitor_pid;
 int monitor_running = 0;
-int monitor_stopping = 0;
-void list_treasures(){}
-void list_hunts(){
-    printf("List of hunts:\n");
-}
-void view_treasure(){
+int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 
+void exec_command(char **argv)
+{
+    int exec_pid;
+    if ((exec_pid = fork()) < 0)
+    {
+        perror("Error creating fork-exec\n");
+        exit(1);
+    }
+    if (exec_pid == 0)
+    {
+        execl("./treasure_manager", "./treasure_manager", argv[0],argv[1],argv[2],NULL);
+    }
+    else
+    {
+        int status;
+        waitpid(exec_pid, &status, 0);
+    }
 }
-void stop_monitor(){
+void list_treasures(int sig) {
+    char hunt_id[100] = "";
+    int fd;
+    if ((fd = open("./commands.txt", O_RDONLY)) < 0)
+    {
+        perror("Error creating commands file");
+        exit(-1);
+    }
+    if (read(fd, hunt_id, 100) < 0)
+    {
+        perror("Error reading from file");
+        exit(-1);
+    }
+    if (close(fd) == -1)
+    {
+        perror("Error closing commands file");
+        exit(-1);
+    }
 
+    char *argv[] = {"--list",hunt_id, NULL};
+    exec_command(argv);
 }
+void list_hunts(int sig)
+{
+    char *argv[] = {"--list_hunts",NULL, NULL};
+    exec_command(argv);
+}
+void view_treasure(int sig)
+{
+    char hunt_id[100] = "";
+    char treasure_id[100] = "";
+    int fd;
+    if ((fd = open("./commands.txt", O_RDONLY)) < 0)
+    {
+        perror("Error creating commands file");
+        exit(-1);
+    }
+    if (read(fd, hunt_id, 100) < 0)
+    {
+        perror("Error reading in file");
+        exit(-1);
+    }
+    if (read(fd, treasure_id, 100) < 0)
+    {
+        perror("Error reading in file");
+        exit(-1);
+    }
+    if (close(fd) == -1)
+    {
+        perror("Error closing commands file");
+        exit(-1);
+    }
+
+    char *argv[] = {"--view",hunt_id,treasure_id, NULL};
+    exec_command(argv);
+}
+
 void monitor_process()
 {
     printf("Monitor process started\n");
     struct sigaction monitor_actions;
     memset(&monitor_actions, 0x00, sizeof(struct sigaction));
     monitor_actions.sa_handler = list_hunts;
-    if(sigaction(SIGUSR1, &monitor_actions, NULL) < 0)
+    if (sigaction(SIGUSR1, &monitor_actions, NULL) < 0)
     {
         perror("Process SIGUSR1 failed");
         exit(-1);
     }
     monitor_actions.sa_handler = list_treasures;
-    if(sigaction(SIGUSR2, &monitor_actions, NULL) < 0)
+    if (sigaction(SIGUSR2, &monitor_actions, NULL) < 0)
     {
         perror("Process SIGUSR2 failed");
         exit(-1);
     }
     monitor_actions.sa_handler = view_treasure;
-    if(sigaction(SIGINT, &monitor_actions, NULL) < 0)
+    if (sigaction(SIGINT, &monitor_actions, NULL) < 0)
     {
         perror("Process SIGINT failed");
         exit(-1);
     }
-    monitor_actions.sa_handler = stop_monitor;
-    if(sigaction(SIGTERM, &monitor_actions, NULL) < 0)
-    {
-        perror("Process SIGTERM failed");
-        exit(-1);
-    }
-    while(1)
+    
+    while (1)
     {
         pause();
     }
 }
-int main(int argc, char *argv[])
+int main()
 {
     char command[256];
-    int fd, mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+    int fd;
 
-    while(1)
+    while (1)
     {
         printf("Commands: start_monitor, list_hunts, list_treasure, view_treasure, stop_monitor, exit\n");
         printf("Enter command: ");
         scanf("%s", command);
         if (strcmp(command, "start_monitor") == 0)
         {
-            if(monitor_running == 1)
+            if (monitor_running == 1)
             {
                 printf("Monitor is already running\n");
-                return 1;
             }
-            else{
+            else
+            {
                 monitor_running = 1;
-                monitor_stopping = 0;
+                
                 if ((fd = open("./commands.txt", O_CREAT, mode)) < 0)
                 {
                     perror("Error creating commands file");
@@ -96,7 +157,7 @@ int main(int argc, char *argv[])
                     monitor_process();
                     exit(0);
                 }
-                else 
+                else
                 {
                     sleep(1);
                     printf("\n");
@@ -104,70 +165,124 @@ int main(int argc, char *argv[])
                 }
             }
         }
-        else if(strcmp(command, "list_hunts") == 0)
-        {   
-            
-            
-            if(monitor_running == 0)
-            {
-                printf("Monitor is not running\n");
-                return 1;
-            }
-            char huntId[256];
-            printf("Enter hunt ID: ");
-            scanf("%s", huntId);
-            if(kill(monitor_pid, SIGUSR1) == -1)
-            {
-                perror("Failed to send SIGUSR1");
-                return 1;
-            }
-            sleep(1);
-        }
-        else if(strcmp(command, "list_treasures") == 0)
+        else if (strcmp(command, "list_hunts") == 0)
         {
-            if(monitor_running == 0)
+            if (monitor_running == 0)
             {
                 printf("Monitor is not running\n");
-                return 1;
             }
-            if(kill(monitor_pid, SIGUSR2) == -1)
+            else
             {
-                perror("Failed to send SIGUSR2");
-                return 1;
+               
+                if (kill(monitor_pid, SIGUSR1) == -1)
+                {
+                    perror("Failed to send SIGUSR1");
+                    return 1;
+                }
+                sleep(1);
             }
-            sleep(1);
+        }
+        else if (strcmp(command, "list_treasure") == 0)
+        {
+            if (monitor_running == 0)
+            {
+                printf("Monitor is not running\n");
+            }
+            else
+            {
+                char huntId[100];
+                printf("Enter hunt ID: ");
+                scanf("%s", huntId);
+                if ((fd = open("./commands.txt", O_WRONLY, mode)) < 0)
+                {
+                    perror("Error creating commands file");
+                    exit(-1);
+                }
+                if(write(fd,huntId,100)<0)
+                {
+                    perror("Error writing in file");
+                    exit(-1);
+                }
+                if (close(fd) == -1)
+                {
+                    perror("Error closing commands file");
+                    exit(-1);
+                }
+                if (kill(monitor_pid, SIGUSR2) == -1)
+                {
+                    perror("Failed to send SIGUSR2");
+                    return 1;
+                }
+                sleep(1);
+            }
         }
         else if (strcmp(command, "view_treasure") == 0)
         {
-            if(monitor_running == 0)
+            if (monitor_running == 0)
             {
                 printf("Monitor is not running\n");
-                return 1;
             }
-            if(kill(monitor_pid, SIGINT) == -1)
+            else
             {
-                perror("Failed to send SIGINT");
-                return 1;
+                char hunt_id[100] = "";
+                char treasure_id[100] = "";
+                printf("Enter hunt ID: ");
+                scanf("%s", hunt_id);
+                printf("Enter treasure ID: ");
+                scanf("%s", treasure_id);
+                printf("\n");
+                if ((fd = open("./commands.txt", O_WRONLY)) < 0)
+                {
+                    perror("Error creating commands file");
+                    exit(-1);
+                }
+                if (write(fd, hunt_id, 100) < 0)
+                {
+                    perror("Error writing in file");
+                    exit(-1);
+                }
+                if (write(fd, treasure_id, 100) < 0)
+                {
+                    perror("Error writing in file");
+                    exit(-1);
+                }
+                if (close(fd) == -1)
+                {
+                    perror("Error closing commands file");
+                    exit(-1);
+                }
+                if (kill(monitor_pid, SIGINT) == -1)
+                {
+                    perror("Failed to send SIGINT");
+                    return 1;
+                }
+                sleep(1);
             }
-            sleep(1);
         }
-        else if(strcmp(command, "stop_monitor") == 0)
+        else if (strcmp(command, "stop_monitor") == 0)
         {
-            if(monitor_running == 0)
+            if (monitor_running == 0)
             {
                 printf("Monitor is not running\n");
-                return 1;
             }
-            if(kill(monitor_pid, SIGTERM) == -1)
+            else
             {
-                perror("Failed to send SIGTERM");
-                return 1;
+
+                if (kill(monitor_pid, SIGTERM) == -1)
+                {
+                    perror("Failed to send SIGTERM");
+                    return 1;
+                }
+                int status;
+                waitpid(monitor_pid, &status, WNOHANG);
+                printf("Monior stopped with code:%d\n", WEXITSTATUS(status));
+                monitor_running = 0;
+                monitor_pid = 0;
             }
-            monitor_running = 0;
         }
-        else if(strcmp(command, "exit") == 0)
+        else if (strcmp(command, "exit") == 0)
         {
-            if(monitor_running == 1)
+            if (monitor_running == 1)
             {
                 printf("Monitor is still running. Please stop the monitor\n");
             }
@@ -179,7 +294,6 @@ int main(int argc, char *argv[])
         else
         {
             printf("Invalid command\n");
-            exit(1);
         }
     }
 }

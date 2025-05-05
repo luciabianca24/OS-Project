@@ -9,7 +9,7 @@
 #include <time.h>
 #include <sys/stat.h>
 #define DIM_MAX 100 // Maximum dimension for strings
-
+mode_t mode = S_IRWXO | S_IRWXG | S_IRWXU;
 // Struct to store GPS coordinates
 typedef struct
 {
@@ -26,6 +26,84 @@ typedef struct
     int value;
 } Treasure;
 // Function to get treasure details from the user
+
+int number_of_treasures(char *huntId)
+{
+
+    char path[DIM_MAX] = "";
+    int fd, res = 0, count = 0;
+    Treasure t;
+    DIR *d;
+
+    if (sprintf(path, "./hunts/%s", huntId) < 0)
+    {
+        perror("Error creating path: add function\n");
+        exit(-1);
+    }
+    if ((d = opendir(path)) == NULL)
+    {
+        printf("Hunt doesn't exist: list function\n");
+        exit(-1);
+    }
+
+    if (sprintf(path, "./hunts/%s/%s_treasures.dat", huntId, huntId) < 0)
+    {
+        perror("Error making treasure file path:number_of_treasures");
+        exit(-1);
+    }
+
+    if ((fd = open(path, O_RDONLY, mode)) < 0)
+    {
+        perror("Error opening treasures file:number_of_treasures");
+        exit(-1);
+    }
+
+    while ((res = read(fd, &t, sizeof(Treasure))) > 0)
+    {
+        count++;
+    }
+
+    if (res < 0)
+    {
+        perror("Error reading from treasures file:number_of_treasures");
+        exit(-1);
+    }
+
+    if (close(fd) == -1)
+    {
+        perror("Error closing treasures file:number_of_treasures");
+        exit(-1);
+    }
+
+    return count;
+}
+
+void list_hunts()
+{
+
+    struct dirent *dp;
+    DIR *d;
+
+    if ((d = opendir("./hunts")) == NULL)
+    {
+        perror("Error opening hunts directory:list_hunts");
+        exit(-1);
+    }
+
+    while ((dp = readdir(d)) != NULL)
+    {
+        if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
+            continue;
+
+        printf("HuntID:%s\nNumber of treasures:%d\n", dp->d_name, number_of_treasures(dp->d_name));
+    }
+    if (closedir(d) == -1)
+    {
+        perror("Error closing dir:list_hunts");
+        exit(-1);
+    }
+}
+
 Treasure getTreasure()
 {
     Treasure t;
@@ -97,7 +175,7 @@ void logger(char *hunt_id, char *message)
     int fd;
     char path[DIM_MAX] = "";
     // Create the path for the log file
-    if (sprintf(path, "./%s/loggedhunt", hunt_id) < 0)
+    if (sprintf(path, "./hunts/%s/loggedhunt", hunt_id) < 0)
     {
         perror("Error creating path: logger function\n");
         exit(-1);
@@ -133,14 +211,19 @@ void add(char *hunt_id)
 
     Treasure t = getTreasure();
     // Check if the hunt directory exists, create it if not
-    if ((d = opendir(hunt_id)) == NULL)
+    if (sprintf(path, "./hunts/%s", hunt_id) < 0)
     {
-        if (mkdir(hunt_id, S_IRWXU | S_IRWXG | S_IRWXO) == -1)
+        perror("Error creating path: add function\n");
+        exit(-1);
+    }
+    if ((d = opendir(path)) == NULL)
+    {
+        if (mkdir(path, mode) == -1)
         {
             perror("Error opening directory: add function\n");
             exit(-1);
         }
-        if (sprintf(path, "./%s/loggedhunt", hunt_id) < 0)
+        if (sprintf(path, "./hunts/%s/loggedhunt", hunt_id) < 0)
         {
             perror("Error creating path: add function\n");
             exit(-1);
@@ -171,7 +254,7 @@ void add(char *hunt_id)
         }
     }
     // Create the path for the treasures file
-    if (sprintf(path, "./%s/%s_treasures.dat", hunt_id, hunt_id) < 0)
+    if (sprintf(path, "./hunts/%s/%s_treasures.dat", hunt_id, hunt_id) < 0)
     {
         perror("Error creating path: add function\n");
         exit(-1);
@@ -193,7 +276,7 @@ void add(char *hunt_id)
         perror("Error closing file: add function\n");
         exit(-1);
     }
-    if(sprintf(message, "Added treasure %s to hunt %s\n", t.treasure_id, hunt_id) < 0)
+    if (sprintf(message, "Added treasure %s to hunt %s\n", t.treasure_id, hunt_id) < 0)
     {
         perror("Error creating message: add function\n");
         exit(-1);
@@ -219,7 +302,12 @@ void list(char *hunt_id)
     char message[DIM_MAX] = "";
     char path[DIM_MAX] = "";
     // Open the hunt directory
-    if ((d = opendir(hunt_id)) == NULL)
+    if (sprintf(path, "./hunts/%s", hunt_id) < 0)
+    {
+        perror("Error creating path: add function\n");
+        exit(-1);
+    }
+    if ((d = opendir(path)) == NULL)
     {
         printf("Hunt doesn't exist: list function\n");
         exit(-1);
@@ -227,7 +315,7 @@ void list(char *hunt_id)
 
     printf("The hunt name: %s\n", hunt_id);
     // Create the path for the treasures file
-    if (sprintf(path, "./%s/%s_treasures.dat", hunt_id, hunt_id) < 0)
+    if (sprintf(path, "./hunts/%s/%s_treasures.dat", hunt_id, hunt_id) < 0)
     {
         perror("Error creating path: list function\n");
         exit(-1);
@@ -250,17 +338,17 @@ void list(char *hunt_id)
     Treasure t;
     int res_read = 0;
     // Read and print each treasure
-    while ((res_read = (read(fd, &t, sizeof(Treasure))) )> 0)
+    while ((res_read = (read(fd, &t, sizeof(Treasure)))) > 0)
     {
         print_treasure(t);
-        printf("\n");   
+        printf("\n");
     }
-    if(res_read == -1)
+    if (res_read == -1)
     {
         perror("Error reading file : list function\n");
         exit(-1);
     }
-    if(sprintf(message, "Listed all treasures from hunt %s\n", hunt_id) < 0)
+    if (sprintf(message, "Listed all treasures from hunt %s\n", hunt_id) < 0)
     {
         perror("Error creating message: list function\n");
         exit(-1);
@@ -286,13 +374,18 @@ void view(char *hunt_id, char *t_id)
     char path[DIM_MAX];
     char message[DIM_MAX] = "";
     // Open the hunt directory
-    if ((d = opendir(hunt_id)) == NULL)
+    if (sprintf(path, "./hunts/%s", hunt_id) < 0)
+    {
+        perror("Error creating path: add function\n");
+        exit(-1);
+    }
+    if ((d = opendir(path)) == NULL)
     {
         printf("Hunt doesn't exist: view function\n");
         exit(-1);
     }
     // Create the path for the treasures file
-    if (sprintf(path, "./%s/%s_treasures.dat", hunt_id, hunt_id) < 0)
+    if (sprintf(path, "./hunts/%s/%s_treasures.dat", hunt_id, hunt_id) < 0)
     {
         perror("Error creating path: view function\n");
         exit(-1);
@@ -306,33 +399,33 @@ void view(char *hunt_id, char *t_id)
     }
     Treasure t;
 
-    int found = 0;// Flag to indicate if the treasure was found
+    int found = 0; // Flag to indicate if the treasure was found
     int res_read = 0;
-    while ((res_read = (read(fd, &t, sizeof(Treasure))) )> 0)
+    while ((res_read = (read(fd, &t, sizeof(Treasure)))) > 0)
     {
         if (strcmp(t.treasure_id, t_id) == 0) // Search for the treasure by ID
         {
-            found = 1; // Treasure found
+            found = 1;         // Treasure found
             print_treasure(t); // Print the treasure details
             printf("\n");
             break;
         }
     }
-    if(found == 0)
+    if (found == 0)
     {
         printf("Treasure not found: view function\n");
         exit(-1);
     }
     else
     {
-        if(sprintf(message, "Viewed treasure %s from hunt %s\n", t.treasure_id, hunt_id) < 0)
+        if (sprintf(message, "Viewed treasure %s from hunt %s\n", t.treasure_id, hunt_id) < 0)
         {
             perror("Error creating message: view function\n");
             exit(-1);
         }
         logger(hunt_id, message); // Log the viewing of the treasure
     }
-    if(res_read == -1)
+    if (res_read == -1)
     {
         perror("Error reading file: view function\n");
         exit(-1);
@@ -358,13 +451,18 @@ void remove_treasure(char *hunt_id, char *t_id)
     char path[DIM_MAX];
     char message[DIM_MAX] = "";
     // Open the hunt directory
-    if ((d = opendir(hunt_id)) == NULL)
+    if (sprintf(path, "./hunts/%s", hunt_id) < 0)
+    {
+        perror("Error creating path: add function\n");
+        exit(-1);
+    }
+    if ((d = opendir(path)) == NULL)
     {
         printf("Hunt doesn't exist: remove_treasure function\n");
         exit(-1);
     }
     // Create the path for the treasures file
-    if (sprintf(path, "./%s/%s_treasures.dat", hunt_id, hunt_id) < 0)
+    if (sprintf(path, "./hunts/%s/%s_treasures.dat", hunt_id, hunt_id) < 0)
     {
         perror("Error creating path: remove_treasure function\n");
         exit(-1);
@@ -380,7 +478,7 @@ void remove_treasure(char *hunt_id, char *t_id)
     int found = 0;             // Flag to indicate if the treasure was found
     int res_read = 0;
     // Search for the treasure by ID
-    while ((res_read = (read(fd, &t, sizeof(Treasure))) ) > 0)
+    while ((res_read = (read(fd, &t, sizeof(Treasure)))) > 0)
     {
         if (strcmp(t.treasure_id, t_id) == 0)
         {
@@ -389,12 +487,12 @@ void remove_treasure(char *hunt_id, char *t_id)
         }
         treasure_position++; // Increment position for each treasure read
     }
-    if(found == 0)
+    if (found == 0)
     {
         printf("Treasure not found: remove_treasure function\n");
         exit(-1);
     }
-    if(res_read == -1)
+    if (res_read == -1)
     {
         perror("Error reading file: remove_treasure function\n");
         exit(-1);
@@ -408,14 +506,14 @@ void remove_treasure(char *hunt_id, char *t_id)
             exit(-1);
         }
         // Move the file pointer to the position of the treasure to be removed
-        if(lseek(fd2, treasure_position * sizeof(Treasure), SEEK_SET) == -1)
+        if (lseek(fd2, treasure_position * sizeof(Treasure), SEEK_SET) == -1)
         {
             perror("Error seeking in file: remove_treasure function\n");
             exit(-1);
         }
-      
+
         // Shift all treasures after the removed one to fill the gap
-        while ((res_read = (read(fd, &t, sizeof(Treasure))) ) > 0)
+        while ((res_read = (read(fd, &t, sizeof(Treasure)))) > 0)
         {
             if (write(fd2, &t, sizeof(Treasure)) == -1)
             {
@@ -424,7 +522,7 @@ void remove_treasure(char *hunt_id, char *t_id)
             }
             treasure_position++; // Increment position for each treasure written
         }
-        if(res_read == -1)
+        if (res_read == -1)
         {
             perror("Error reading file: remove_treasure function\n");
             exit(-1);
@@ -442,7 +540,7 @@ void remove_treasure(char *hunt_id, char *t_id)
             exit(-1);
         }
     }
-    if(sprintf(message, "Removed treasure %s from hunt %s\n", t_id, hunt_id) < 0)
+    if (sprintf(message, "Removed treasure %s from hunt %s\n", t_id, hunt_id) < 0)
     {
         perror("Error creating message: remove_treasure function\n");
         exit(-1);
@@ -467,17 +565,22 @@ void remove_hunt(char *hunt_id)
     DIR *d;
     char path[DIM_MAX];
     struct dirent *dp;
-    if ((d = opendir(hunt_id)) == NULL) // Open the hunt directory
+    if (sprintf(path, "./hunts/%s", hunt_id) < 0)
+    {
+        perror("Error creating path\n");
+        exit(-1);
+    }
+    if ((d = opendir(path)) == NULL) // Open the hunt directory
     {
         perror("Hunt doesn't exist: remove_hunt function\n");
         exit(-1);
     }
     // Create the path for the treasures file
-    while((dp = readdir(d)) != NULL)
+    while ((dp = readdir(d)) != NULL)
     {
         if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
             continue; // Skip the current and parent directory entries
-        if (sprintf(path, "./%s/%s", hunt_id, dp->d_name) < 0)
+        if (sprintf(path, "./hunts/%s/%s", hunt_id, dp->d_name) < 0)
         {
             perror("Error creating path: remove_hunt function\n");
             exit(-1);
@@ -489,7 +592,12 @@ void remove_hunt(char *hunt_id)
             exit(-1);
         }
     }
-    if(rmdir(hunt_id) == -1)
+    if (sprintf(path, "./hunts/%s", hunt_id) < 0)
+    {
+        perror("Error creating path: remove_hunt function\n");
+        exit(-1);
+    }
+    if (rmdir(path) == -1)
     {
         perror("Error removing directory: remove_hunt function\n");
         exit(-1);
@@ -515,12 +623,22 @@ void remove_hunt(char *hunt_id)
 int main(int argc, char **argv)
 {
     int ok = 0;
+
     if (argc < 3)
     {
-        ok = 1;
-        printf("Not enough arguments\n");
-        exit(-1);
+        if (argc == 2 && (strcmp(argv[1], "--list_hunts") == 0))
+        {
+            list_hunts();
+            ok = 1;
+        }
+        else
+        {
+            ok = 1;
+            printf("Not enough arguments\n");
+            exit(-1);
+        }
     }
+    mkdir("./hunts", mode);
     if (strcmp(argv[1], "--add") == 0)
     {
         ok = 1;
@@ -533,7 +651,6 @@ int main(int argc, char **argv)
         {
             add(argv[2]);
         }
-
     }
     if (strcmp(argv[1], "--list") == 0)
     {
@@ -560,7 +677,7 @@ int main(int argc, char **argv)
         {
             view(argv[2], argv[3]);
         }
-    }   
+    }
     if (strcmp(argv[1], "--remove") == 0)
     {
         ok = 1;
@@ -591,6 +708,5 @@ int main(int argc, char **argv)
     {
         printf("Invalid command\n");
         exit(-1);
-    }   
-    
+    }
 }
