@@ -30,34 +30,21 @@ void exec_command(char **argv)
         waitpid(exec_pid, &status, 0);
     }
 }
-void list_treasures(int sig) {
-    char hunt_id[100] = "";
-    int fd;
-    if ((fd = open("./commands.txt", O_RDONLY)) < 0)
-    {
-        perror("Error creating commands file");
-        exit(-1);
-    }
-    if (read(fd, hunt_id, 100) < 0)
-    {
-        perror("Error reading from file");
-        exit(-1);
-    }
-    if (close(fd) == -1)
-    {
-        perror("Error closing commands file");
-        exit(-1);
-    }
-
+void list_treasures(char hunt_id[]) {
     char *argv[] = {"--list",hunt_id, NULL};
     exec_command(argv);
 }
-void list_hunts(int sig)
+void list_hunts()
 {
     char *argv[] = {"--list_hunts",NULL, NULL};
     exec_command(argv);
 }
-void view_treasure(int sig)
+void view_treasure(char hunt_id[], char treasure_id[])
+{
+    char *argv[] = {"--view",hunt_id,treasure_id, NULL};
+    exec_command(argv);
+}
+void read_from_file()
 {
     char hunt_id[100] = "";
     char treasure_id[100] = "";
@@ -67,50 +54,56 @@ void view_treasure(int sig)
         perror("Error creating commands file");
         exit(-1);
     }
-    if (read(fd, hunt_id, 100) < 0)
+    char command[100] = "";
+    if (read(fd, &command, 100) < 0)
     {
         perror("Error reading in file");
         exit(-1);
     }
-    if (read(fd, treasure_id, 100) < 0)
+    if (strcmp(command, "list_hunts") == 0)
     {
-        perror("Error reading in file");
-        exit(-1);
+        list_hunts();
+    }
+    else if (strcmp(command, "list_treasure") == 0)
+    {
+        if (read(fd, hunt_id, 100) < 0)
+        {
+            perror("Error reading in file");
+            exit(-1);
+        }
+        list_treasures(hunt_id);
+    }
+    else if (strcmp(command, "view_treasure") == 0)
+    {
+        if (read(fd, hunt_id, 100) < 0)
+        {
+            perror("Error reading in file");
+            exit(-1);
+        }
+        if (read(fd, treasure_id, 100) < 0)
+        {
+            perror("Error reading in file");
+            exit(-1);
+        }
+        view_treasure(hunt_id, treasure_id);
     }
     if (close(fd) == -1)
     {
         perror("Error closing commands file");
         exit(-1);
     }
-
-    char *argv[] = {"--view",hunt_id,treasure_id, NULL};
-    exec_command(argv);
 }
-
 void monitor_process()
 {
     printf("Monitor process started\n");
     struct sigaction monitor_actions;
     memset(&monitor_actions, 0x00, sizeof(struct sigaction));
-    monitor_actions.sa_handler = list_hunts;
+    monitor_actions.sa_handler = read_from_file;
     if (sigaction(SIGUSR1, &monitor_actions, NULL) < 0)
     {
         perror("Process SIGUSR1 failed");
         exit(-1);
     }
-    monitor_actions.sa_handler = list_treasures;
-    if (sigaction(SIGUSR2, &monitor_actions, NULL) < 0)
-    {
-        perror("Process SIGUSR2 failed");
-        exit(-1);
-    }
-    monitor_actions.sa_handler = view_treasure;
-    if (sigaction(SIGINT, &monitor_actions, NULL) < 0)
-    {
-        perror("Process SIGINT failed");
-        exit(-1);
-    }
-    
     while (1)
     {
         pause();
@@ -120,7 +113,6 @@ int main()
 {
     char command[256];
     int fd;
-
     while (1)
     {
         printf("Commands: start_monitor, list_hunts, list_treasure, view_treasure, stop_monitor, exit\n");
@@ -135,7 +127,6 @@ int main()
             else
             {
                 monitor_running = 1;
-                
                 if ((fd = open("./commands.txt", O_CREAT, mode)) < 0)
                 {
                     perror("Error creating commands file");
@@ -173,7 +164,21 @@ int main()
             }
             else
             {
-               
+                if ((fd = open("./commands.txt", O_WRONLY, mode)) < 0)
+                {
+                    perror("Error creating commands file");
+                    exit(-1);
+                }
+                if (write(fd, "list_hunts", 100) < 0)
+                {
+                    perror("Error writing in file");
+                    exit(-1);
+                }
+                if (close(fd) == -1)
+                {
+                    perror("Error closing commands file");
+                    exit(-1);
+                }
                 if (kill(monitor_pid, SIGUSR1) == -1)
                 {
                     perror("Failed to send SIGUSR1");
@@ -198,6 +203,11 @@ int main()
                     perror("Error creating commands file");
                     exit(-1);
                 }
+                if(write(fd, "list_treasure", 100) < 0)
+                {
+                    perror("Error writing in file");
+                    exit(-1);
+                }
                 if(write(fd,huntId,100)<0)
                 {
                     perror("Error writing in file");
@@ -208,7 +218,7 @@ int main()
                     perror("Error closing commands file");
                     exit(-1);
                 }
-                if (kill(monitor_pid, SIGUSR2) == -1)
+                if (kill(monitor_pid, SIGUSR1) == -1)
                 {
                     perror("Failed to send SIGUSR2");
                     return 1;
@@ -236,6 +246,11 @@ int main()
                     perror("Error creating commands file");
                     exit(-1);
                 }
+                if (write(fd, "view_treasure", 100) < 0)
+                {
+                    perror("Error writing in file");
+                    exit(-1);
+                }
                 if (write(fd, hunt_id, 100) < 0)
                 {
                     perror("Error writing in file");
@@ -251,7 +266,7 @@ int main()
                     perror("Error closing commands file");
                     exit(-1);
                 }
-                if (kill(monitor_pid, SIGINT) == -1)
+                if (kill(monitor_pid, SIGUSR1) == -1)
                 {
                     perror("Failed to send SIGINT");
                     return 1;
