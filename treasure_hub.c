@@ -7,9 +7,11 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <ctype.h>
-
+#include <errno.h>
+#include <fcntl.h>
 pid_t monitor_pid;
 int monitor_running = 0;
+int pfd[2];
 int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 
 void exec_command(char **argv)
@@ -93,9 +95,36 @@ void read_from_file()
         exit(-1);
     }
 }
+void read_from_pipe()
+{
+    char buff[512];
+    while(1)
+    {
+        int read_bytes = read(pfd[0], buff, sizeof(buff) - 1);
+        if (read_bytes > 0)
+        {
+            buff[read_bytes] = '\0';
+            printf("%s\n", buff);
+        }
+        else if (read_bytes == 0)
+        {
+            break;
+        }
+        else if (read_bytes == -1 && errno == EAGAIN)
+        {
+            break;
+        }
+        else
+        {
+            perror("Error reading from pipe");
+            exit(-1);
+        }
+    }
+}
 void monitor_process()
 {
     printf("Monitor process started\n");
+    dup2(pfd[1], STDOUT_FILENO);
     struct sigaction monitor_actions;
     memset(&monitor_actions, 0x00, sizeof(struct sigaction));
     monitor_actions.sa_handler = read_from_file;
@@ -104,6 +133,7 @@ void monitor_process()
         perror("Process SIGUSR1 failed");
         exit(-1);
     }
+    close(pfd[1]);///---------------
     while (1)
     {
         pause();
@@ -137,6 +167,11 @@ int main()
                     perror("Error closing commands file");
                     exit(-1);
                 }
+                if (pipe(pfd) == -1)
+                {
+                    perror("Error creating pipe");
+                    exit(-1);
+                }
                 monitor_pid = fork();
                 if (monitor_pid < 0)
                 {
@@ -145,11 +180,18 @@ int main()
                 }
                 else if (monitor_pid == 0)
                 {
+                    close(pfd[0]);//-------
                     monitor_process();
                     exit(0);
                 }
                 else
                 {
+                    close(pfd[1]);//---------
+                    if(fcntl(pfd[0], F_SETFL, O_NONBLOCK) == -1)
+                    {
+                        perror("Error setting non-blocking mode");
+                        exit(-1);
+                    }
                     sleep(1);
                     printf("\n");
                     continue;
@@ -184,6 +226,8 @@ int main()
                     perror("Failed to send SIGUSR1");
                     return 1;
                 }
+                sleep(1);
+                read_from_pipe();
                 sleep(1);
             }
         }
@@ -223,6 +267,8 @@ int main()
                     perror("Failed to send SIGUSR2");
                     return 1;
                 }
+                sleep(1);
+                read_from_pipe();
                 sleep(1);
             }
         }
@@ -271,6 +317,8 @@ int main()
                     perror("Failed to send SIGINT");
                     return 1;
                 }
+                sleep(1);
+                read_from_pipe();
                 sleep(1);
             }
         }
