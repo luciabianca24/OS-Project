@@ -9,9 +9,9 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <dirent.h>
 pid_t monitor_pid;
 int monitor_running = 0;
-int pfd[2];
 int mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 
 void exec_command(char **argv)
@@ -24,26 +24,30 @@ void exec_command(char **argv)
     }
     if (exec_pid == 0)
     {
-        execl("./treasure_manager", "./treasure_manager", argv[0],argv[1],argv[2],NULL);
+        execvp(argv[0], argv);
     }
     else
     {
         int status;
-        waitpid(exec_pid, &status, 0);
+        if(waitpid(exec_pid, &status, 0) == -1)
+        {
+            perror("Error waitpid");
+            exit(-1);
+        }
     }
 }
 void list_treasures(char hunt_id[]) {
-    char *argv[] = {"--list",hunt_id, NULL};
+    char *argv[] = {"./treasure_manager", "--list", hunt_id, NULL};
     exec_command(argv);
 }
 void list_hunts()
 {
-    char *argv[] = {"--list_hunts",NULL, NULL};
+    char *argv[] = {"./treasure_manager", "--list_hunts", NULL};
     exec_command(argv);
 }
 void view_treasure(char hunt_id[], char treasure_id[])
 {
-    char *argv[] = {"--view",hunt_id,treasure_id, NULL};
+    char *argv[] = {"./treasure_manager", "--view", hunt_id, treasure_id, NULL};
     exec_command(argv);
 }
 void read_from_file()
@@ -95,12 +99,12 @@ void read_from_file()
         exit(-1);
     }
 }
-void read_from_pipe()
+void read_from_pipe(int pfd)
 {
     char buff[512];
     while(1)
     {
-        int read_bytes = read(pfd[0], buff, sizeof(buff) - 1);
+        int read_bytes = read(pfd, buff, sizeof(buff) - 1);
         if (read_bytes > 0)
         {
             buff[read_bytes] = '\0';
@@ -121,7 +125,72 @@ void read_from_pipe()
         }
     }
 }
-void monitor_process()
+void calculate_score()
+{
+    struct dirent *dp;
+    DIR *d;
+    int pfd[2];
+    int pid;
+    if ((d = opendir("./hunts")) == NULL)
+    {
+        perror("Error opening hunts directory");
+        exit(-1);
+    }
+    int compile_status = system("gcc -o calculate_score calculate_score.c");
+    if (compile_status != 0)
+    {
+        perror("Error compiling calculate_score.c");
+        return;
+    }
+    while((dp = readdir(d)) != NULL)
+    {
+        if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
+            continue;
+        if(pipe(pfd) == -1)
+        {
+            perror("Error creating pipe");
+            exit(-1);
+        }
+        if(pid = fork() == -1)
+        {
+            perror("Error creating fork");
+            exit(-1);
+        }
+        else if(pid == 0)
+        {
+            if(close(pfd[0]) == -1)
+            {
+                perror("Error closing pipe");
+                exit(-1);
+            }
+            dup2(pfd[1], STDOUT_FILENO);
+            char *argv[] = {"./calculate_score", dp->d_name, NULL};
+            exec_command(argv);
+            exit(-1);
+        }
+        else
+        {
+            if(close(pfd[1]) == -1)
+            {
+                perror("Error closing pipe");
+                exit(-1);
+            }
+            int status;
+            if (waitpid(pid, &status, 0) == -1)
+            {
+                perror("Error waitpid");
+                exit(-1);
+            }
+            read_from_pipe(pfd[0]);
+        }
+    }
+    if (closedir(d) == -1)
+    {
+        perror("Error closing dir");
+        exit(-1);
+    }
+}
+void monitor_process(int pfd[2])
 {
     printf("Monitor process started\n");
     dup2(pfd[1], STDOUT_FILENO);
@@ -133,7 +202,11 @@ void monitor_process()
         perror("Process SIGUSR1 failed");
         exit(-1);
     }
-    close(pfd[1]);///---------------
+    if (close(pfd[1]) == -1)
+    {
+        perror("Error closing pipe");
+        exit(-1);
+    }
     while (1)
     {
         pause();
@@ -143,9 +216,10 @@ int main()
 {
     char command[256];
     int fd;
+    int pfd[2];
     while (1)
     {
-        printf("Commands: start_monitor, list_hunts, list_treasure, view_treasure, stop_monitor, exit\n");
+        printf("Commands: start_monitor, list_hunts, list_treasure, view_treasure, calculate_score, stop_monitor, exit\n");
         printf("Enter command: ");
         scanf("%s", command);
         if (strcmp(command, "start_monitor") == 0)
@@ -180,13 +254,21 @@ int main()
                 }
                 else if (monitor_pid == 0)
                 {
-                    close(pfd[0]);//-------
-                    monitor_process();
+                    if(close(pfd[0]) == -1)
+                    {
+                        perror("Error closing pipe");
+                        exit(-1);
+                    }
+                    monitor_process(pfd);
                     exit(0);
                 }
                 else
                 {
-                    close(pfd[1]);//---------
+                    if(close(pfd[1]) == -1)
+                    {
+                        perror("Error closing pipe");
+                        exit(-1);
+                    }
                     if(fcntl(pfd[0], F_SETFL, O_NONBLOCK) == -1)
                     {
                         perror("Error setting non-blocking mode");
@@ -227,7 +309,7 @@ int main()
                     return 1;
                 }
                 sleep(1);
-                read_from_pipe();
+                read_from_pipe(pfd[0]);
                 sleep(1);
             }
         }
@@ -268,7 +350,7 @@ int main()
                     return 1;
                 }
                 sleep(1);
-                read_from_pipe();
+                read_from_pipe(pfd[0]);
                 sleep(1);
             }
         }
@@ -318,7 +400,7 @@ int main()
                     return 1;
                 }
                 sleep(1);
-                read_from_pipe();
+                read_from_pipe(pfd[0]);
                 sleep(1);
             }
         }
@@ -342,6 +424,10 @@ int main()
                 monitor_running = 0;
                 monitor_pid = 0;
             }
+        }
+        else if(strcmp(command, "calculate_score") == 0)
+        {
+            calculate_score();
         }
         else if (strcmp(command, "exit") == 0)
         {
