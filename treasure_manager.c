@@ -40,11 +40,6 @@ int number_of_treasures(char *huntId)
         perror("Error creating path: add function\n");
         exit(-1);
     }
-    if ((d = opendir(path)) == NULL)
-    {
-        printf("Hunt doesn't exist: list function\n");
-        exit(-1);
-    }
 
     if (sprintf(path, "./hunts/%s/%s_treasures.dat", huntId, huntId) < 0)
     {
@@ -72,11 +67,6 @@ int number_of_treasures(char *huntId)
     if (close(fd) == -1)
     {
         perror("Error closing treasures file:number_of_treasures");
-        exit(-1);
-    }
-    if(closedir(d) == -1)
-    {
-        perror("Error closing directory:number_of_treasures");
         exit(-1);
     }
     return count;
