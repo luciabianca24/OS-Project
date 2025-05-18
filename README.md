@@ -45,5 +45,12 @@ gcc -o treasure_hub treasure_hub.c
 ./treasure_hub
 ```
 You can choose the commands you want to run from the interface
+    -start_monitor<br />
+    -list_hunts <br />
+    -list_treasure<br />
+    -view_treasure<br />
+    -calculate_score<br />
+    -stop_monitor<br />
+    -exit
 
 
