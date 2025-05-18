@@ -151,7 +151,7 @@ void calculate_score()
             perror("Error creating pipe");
             exit(-1);
         }
-        if(pid = fork() == -1)
+        if((pid = fork()) == -1)
         {
             perror("Error creating fork");
             exit(-1);
@@ -160,7 +160,7 @@ void calculate_score()
         {
             if(close(pfd[0]) == -1)
             {
-                perror("Error closing pipe");
+                perror("Error closing read end of pipe");
                 exit(-1);
             }
             dup2(pfd[1], STDOUT_FILENO);
@@ -172,7 +172,7 @@ void calculate_score()
         {
             if(close(pfd[1]) == -1)
             {
-                perror("Error closing pipe");
+                perror("Error closing write end of pipe");
                 exit(-1);
             }
             int status;
@@ -204,7 +204,7 @@ void monitor_process(int pfd[2])
     }
     if (close(pfd[1]) == -1)
     {
-        perror("Error closing pipe");
+        perror("Error closing write end of pipe");
         exit(-1);
     }
     while (1)
@@ -256,7 +256,7 @@ int main()
                 {
                     if(close(pfd[0]) == -1)
                     {
-                        perror("Error closing pipe");
+                        perror("Error closing read end of pipe");
                         exit(-1);
                     }
                     monitor_process(pfd);
@@ -266,7 +266,7 @@ int main()
                 {
                     if(close(pfd[1]) == -1)
                     {
-                        perror("Error closing pipe");
+                        perror("Error closing write end of pipe");
                         exit(-1);
                     }
                     if(fcntl(pfd[0], F_SETFL, O_NONBLOCK) == -1)
